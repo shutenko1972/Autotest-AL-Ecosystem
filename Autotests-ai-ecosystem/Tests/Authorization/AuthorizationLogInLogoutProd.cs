@@ -12,7 +12,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 
-namespace Autotests.Authorization
+namespace Authorization
 {
     [TestFixture]
     [DisplayName("AuthorizationLogInLogout")]

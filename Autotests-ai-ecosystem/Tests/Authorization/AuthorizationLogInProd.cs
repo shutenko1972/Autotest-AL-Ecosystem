@@ -11,10 +11,10 @@ using OpenQA.Selenium.Support.UI;
 using OpenQA.Selenium.Interactions;
 using NUnit.Framework;
 
-namespace Autotests. Authorization
+namespace Authorization
 {
     [TestFixture]
-    public class AuthorizationLogInTestTest
+    public class AuthorizationLogInProdProd
     {
         private IWebDriver driver;
         public IDictionary<string, object> vars { get; private set; }
@@ -44,7 +44,7 @@ namespace Autotests. Authorization
         }
 
         [Test]
-        public void AuthorizationLogInTest()
+        public void AuthorizationLogInProd()
         {
             try
             {
@@ -54,7 +54,7 @@ namespace Autotests. Authorization
                 }
 
                 Console.WriteLine("Step 1: Navigating to login page...");
-                driver.Navigate().GoToUrl("https://ai-ecosystem-test.janusww.com:9999/auth/login.html");
+                driver.Navigate().GoToUrl("https://ai-ecosystem.janusww.com/auth/login.html");
 
                 Console.WriteLine("Waiting for login page to load...");
                 wait.Until(d =>
@@ -130,8 +130,8 @@ namespace Autotests. Authorization
                 try
                 {
                     var screenshot = ((ITakesScreenshot)driver).GetScreenshot();
-                    screenshot.SaveAsFile("error_screenshot_login_test.png");
-                    Console.WriteLine("Screenshot saved as error_screenshot_login_test.png");
+                    screenshot.SaveAsFile("error_screenshot_login_prod.png");
+                    Console.WriteLine("Screenshot saved as error_screenshot_login_prod.png");
                 }
                 catch (Exception screenshotEx)
                 {

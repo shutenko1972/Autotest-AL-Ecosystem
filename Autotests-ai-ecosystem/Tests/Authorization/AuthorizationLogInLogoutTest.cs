@@ -13,6 +13,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 
+namespace Autotests. Authorization
 [TestFixture]
 [DisplayName("AuthorizationLogInLogout")]
 public class AuthorizationLogInLogoutTestTest

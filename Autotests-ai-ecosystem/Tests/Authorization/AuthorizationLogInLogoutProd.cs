@@ -41,6 +41,7 @@ public class AuthorizationLogInLogoutProdProd
     }
 
     [Test]
+	[DisplayName("AuthorizationLogInLogout")]
     public void AuthorizationLogInLogoutProd()
     {
         try

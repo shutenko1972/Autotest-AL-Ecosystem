@@ -7,13 +7,13 @@ using System.Linq;
 namespace Authorization
 {
     [TestFixture]
-    public class AuthorizationLogInLogoutProdProd : Autotests.BaseTest
+    public class AuthorizationLogInLogoutProd : Autotests.BaseTest
     {
         private const string ValidLogin = "v_shutenko";
         private const string ValidPassword = "8nEThznM";
 
         [Test]
-        public void AuthorizationLogInLogoutProd()
+        public void AuthorizationLogInLogoutTest()
         {
             try
             {

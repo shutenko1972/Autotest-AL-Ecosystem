@@ -3,7 +3,7 @@ using NUnit.Framework;
 using OpenQA.Selenium;
 using System;
 
-namespace TestExample
+namespace ABAutotestsExample
 {
     [TestFixture]
     public class SimpleTest : BaseTest

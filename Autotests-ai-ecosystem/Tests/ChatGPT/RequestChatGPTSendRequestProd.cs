@@ -76,7 +76,7 @@ namespace ChatGPT
                 textArea.SendKeys("Привет!");
 
                 // Проверяем, что текст введен корректно
-                string enteredText = textArea.GetAttribute("value");
+                string enteredText = textArea.GetAttribute("value") ?? string.Empty;
                 Assert.That(enteredText, Is.EqualTo("Привет!"), "Текст запроса не был введен корректно");
                 Report.AddStep($"Запрос введен: {enteredText}");
 
@@ -106,7 +106,8 @@ namespace ChatGPT
 
                         if (responseElement != null)
                         {
-                            Report.AddStep($"Ответ получен: {responseElement.Text.Substring(0, Math.Min(50, responseElement.Text.Length))}...");
+                            string responseText = responseElement.Text ?? string.Empty;
+                            Report.AddStep($"Ответ получен: {responseText.Substring(0, Math.Min(50, responseText.Length))}...");
                             responseReceived = true;
                             break;
                         }

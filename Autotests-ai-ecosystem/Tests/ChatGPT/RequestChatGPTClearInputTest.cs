@@ -9,8 +9,8 @@ namespace ChatGPT
     [TestFixture]
     public class RequestChatGPTClearInputTest : IDisposable
     {
-        private IWebDriver driver;
-        private WebDriverWait wait;
+        private IWebDriver? driver;
+        private WebDriverWait? wait;
         private const string ValidLogin = "v_shutenko";
         private const string ValidPassword = "8nEThznM";
 
@@ -34,11 +34,17 @@ namespace ChatGPT
         public void Dispose()
         {
             TearDown();
+            GC.SuppressFinalize(this);
         }
 
         [Test]
         public void RequestChatGPTClearInput()
         {
+            if (driver == null || wait == null)
+            {
+                throw new InvalidOperationException("Driver или Wait не инициализированы");
+            }
+
             try
             {
                 Console.WriteLine("Шаг 1: Переход на страницу входа...");
@@ -100,11 +106,11 @@ namespace ChatGPT
                 textArea.SendKeys("Привет!");
 
                 // Проверяем, что текст введен корректно
-                string enteredText = textArea.GetAttribute("value");
+                string enteredText = textArea.GetAttribute("value") ?? string.Empty;
                 Assert.That(enteredText, Is.EqualTo("Привет!"), "Текст не был введен корректно");
                 Console.WriteLine($"Текст введен: {enteredText}");
 
-                Console.WriteLine("Шаг 8: Очистка поля ввода...");
+                Console.WriteLine("Шаг 8: Очистка поле ввода...");
                 var clearButton = driver.FindElement(By.Id("clear_request"));
                 clearButton.Click();
 
@@ -114,7 +120,7 @@ namespace ChatGPT
                     try
                     {
                         var currentTextArea = drv.FindElement(By.Id("textarea_request"));
-                        string currentText = currentTextArea.GetAttribute("value");
+                        string currentText = currentTextArea.GetAttribute("value") ?? string.Empty;
                         return string.IsNullOrEmpty(currentText);
                     }
                     catch
@@ -125,7 +131,7 @@ namespace ChatGPT
 
                 // Финальная проверка
                 var clearedTextArea = driver.FindElement(By.Id("textarea_request"));
-                string clearedText = clearedTextArea.GetAttribute("value");
+                string clearedText = clearedTextArea.GetAttribute("value") ?? string.Empty;
 
                 Assert.That(string.IsNullOrEmpty(clearedText), Is.True,
                     $"Поле ввода не было очищено. Текущее содержимое: '{clearedText}'");

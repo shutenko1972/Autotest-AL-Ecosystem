@@ -76,7 +76,7 @@ namespace ChatGPT
                 textArea.SendKeys("Привет!");
 
                 // Проверяем, что текст введен корректно
-                string enteredText = textArea.GetAttribute("value");
+                string enteredText = textArea.GetAttribute("value") ?? string.Empty;
                 Assert.That(enteredText, Is.EqualTo("Привет!"), "Текст не был введен корректно");
                 Report.AddStep($"Текст введен: {enteredText}");
 
@@ -90,7 +90,7 @@ namespace ChatGPT
                     try
                     {
                         var currentTextArea = d.FindElement(By.Id("textarea_request"));
-                        string currentText = currentTextArea.GetAttribute("value");
+                        string currentText = currentTextArea.GetAttribute("value") ?? string.Empty;
                         return string.IsNullOrEmpty(currentText);
                     }
                     catch
@@ -101,7 +101,7 @@ namespace ChatGPT
 
                 // Финальная проверка
                 var clearedTextArea = Driver.FindElement(By.Id("textarea_request"));
-                string clearedText = clearedTextArea.GetAttribute("value");
+                string clearedText = clearedTextArea.GetAttribute("value") ?? string.Empty;
 
                 Assert.That(string.IsNullOrEmpty(clearedText), Is.True,
                     $"Поле ввода не было очищено. Текущее содержимое: '{clearedText}'");

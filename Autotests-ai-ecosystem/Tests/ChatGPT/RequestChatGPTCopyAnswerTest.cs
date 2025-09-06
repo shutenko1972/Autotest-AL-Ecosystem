@@ -76,7 +76,7 @@ namespace ChatGPT
                 textArea.SendKeys("Ghbdtn! Lhepmz!");
 
                 // Проверяем, что текст введен корректно
-                string enteredText = textArea.GetAttribute("value");
+                string enteredText = textArea.GetAttribute("value") ?? string.Empty;
                 Assert.That(enteredText, Is.EqualTo("Ghbdtn! Lhepmz!"), "Текст запроса не был введен корректно");
                 Report.AddStep($"Запрос введен: {enteredText}");
 
@@ -85,7 +85,7 @@ namespace ChatGPT
                 sendButton.Click();
 
                 Report.AddStep("Шаг 9: Ожидание ответа...");
-                IWebElement responseElement = null;
+                IWebElement? responseElement = null;
                 DateTime startTime = DateTime.Now;
 
                 while ((DateTime.Now - startTime).TotalSeconds < 90 && responseElement == null)
@@ -102,7 +102,8 @@ namespace ChatGPT
 
                         if (responseElement != null)
                         {
-                            Report.AddStep($"Ответ найден: {responseElement.Text.Substring(0, Math.Min(50, responseElement.Text.Length))}...");
+                            string responseText = responseElement.Text ?? string.Empty;
+                            Report.AddStep($"Ответ найден: {responseText.Substring(0, Math.Min(50, responseText.Length))}...");
                             break;
                         }
 
@@ -138,7 +139,7 @@ namespace ChatGPT
                 textArea.SendKeys(safeText);
 
                 // Проверяем, что новый текст введен
-                string newText = textArea.GetAttribute("value");
+                string newText = textArea.GetAttribute("value") ?? string.Empty;
                 Assert.That(newText, Is.EqualTo(safeText), "Новый текст не был введен корректно");
 
                 Report.AddSuccess("Тест завершен успешно: функциональность копирования ответа работает корректно");

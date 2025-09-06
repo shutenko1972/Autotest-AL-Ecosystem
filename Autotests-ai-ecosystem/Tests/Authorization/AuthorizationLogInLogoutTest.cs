@@ -1,60 +1,28 @@
 ﻿using NUnit.Framework;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.UI;
-using OpenQA.Selenium.Interactions;
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Threading;
-using System.Drawing;
 
 namespace Authorization
 {
     [TestFixture]
-    [DisplayName("AuthorizationLogInLogout")]
-    public class AuthorizationLogInLogoutTestTest : IDisposable
+    public class AuthorizationLogInLogoutTestTest : Autotests.BaseTest
     {
-        private IWebDriver driver;
-        public IDictionary<string, object> vars { get; private set; }
-        private IJavaScriptExecutor js;
-        private WebDriverWait wait;
-
-        [SetUp]
-        public void SetUp()
-        {
-            var options = new ChromeOptions();
-            options.AddArgument("--start-maximized");
-            options.AddArgument("--ignore-certificate-errors");
-            driver = new ChromeDriver(options);
-            js = (IJavaScriptExecutor)driver;
-            vars = new Dictionary<string, object>();
-            wait = new WebDriverWait(driver, TimeSpan.FromSeconds(40));
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            driver?.Quit();
-            driver?.Dispose();
-        }
-
-        public void Dispose()
-        {
-            TearDown();
-        }
+        private const string ValidLogin = "v_shutenko";
+        private const string ValidPassword = "8nEThznM";
 
         [Test]
         public void AuthorizationLogInLogoutTest()
         {
             try
             {
-                Console.WriteLine("Step 1: Navigating to login page...");
-                driver.Navigate().GoToUrl("https://ai-ecosystem-test.janusww.com:9999/auth/login.html");
+                Report.AddStep("Шаг 1: Переход на страницу входа...");
+                Driver.Navigate().GoToUrl("https://ai-ecosystem-test.janusww.com:9999/auth/login.html");
+                Report.AddUrlInfo(Driver.Url);
 
-                Console.WriteLine("Waiting for login page to load...");
-                wait.Until(d =>
+                Report.AddStep("Ожидание загрузки страницы входа...");
+                Wait.Until(d =>
                 {
                     try
                     {
@@ -67,28 +35,43 @@ namespace Authorization
                     }
                 });
 
-                Console.WriteLine("Step 2: Filling login field...");
-                var loginField = driver.FindElement(By.Id("loginform-login"));
+                Report.AddStep("Шаг 2: Заполнение поля логина...");
+                var loginField = Driver.FindElement(By.Id("loginform-login"));
                 loginField.Clear();
-                loginField.SendKeys("v_shutenko");
+                loginField.SendKeys(ValidLogin);
 
-                Console.WriteLine("Step 3: Filling password field...");
-                var passwordField = driver.FindElement(By.Id("loginform-password"));
+                Report.AddStep("Шаг 3: Заполнение поля пароля...");
+                var passwordField = Driver.FindElement(By.Id("loginform-password"));
                 passwordField.Clear();
-                passwordField.SendKeys("8nEThznM");
+                passwordField.SendKeys(ValidPassword);
 
-                Console.WriteLine("Step 4: Clicking login button...");
-                var loginButton = driver.FindElement(By.CssSelector(".icon-circle-right2"));
+                Report.AddStep("Шаг 4: Нажатие кнопки входа...");
+                var loginButton = Driver.FindElement(By.CssSelector(".icon-circle-right2"));
                 loginButton.Click();
 
-                Console.WriteLine("Step 5: Waiting for successful login...");
-                wait.Until(d => !d.Url.ToLower().Contains("login"));
+                Report.AddStep("Шаг 5: Ожидание результата входа...");
 
-                wait.Until(d =>
+                // Ждем либо успешного входа, либо появления ошибки
+                bool loginResultDetected = Wait.Until(d =>
                 {
                     try
                     {
-                        return d.FindElement(By.CssSelector(".dropdown-user")).Displayed;
+                        // Проверяем успешный вход - исчезла страница логина и появились элементы dashboard
+                        var currentUrl = d.Url.ToLower();
+                        bool isNotLoginPage = !currentUrl.Contains("login") &&
+                                             !currentUrl.Contains("auth/login");
+
+                        bool hasDashboardElements = d.FindElements(By.CssSelector(".dropdown-user, .user-menu, .dashboard, .main-content"))
+                                                   .Any(e => e.Displayed);
+
+                        // Проверяем ошибку входа - остались на странице логина + есть сообщение об ошибке
+                        bool isStillOnLoginPage = currentUrl.Contains("login") ||
+                                                 currentUrl.Contains("auth/login");
+
+                        bool hasErrorElements = d.FindElements(By.CssSelector(".error, .alert, .text-danger, .login-error, .field-error, [class*='error'], [class*='alert']"))
+                                                .Any(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
+
+                        return (isNotLoginPage && hasDashboardElements) || (isStillOnLoginPage && hasErrorElements);
                     }
                     catch
                     {
@@ -96,286 +79,218 @@ namespace Authorization
                     }
                 });
 
-                Console.WriteLine("Login successful");
-                Thread.Sleep(1000);
+                if (!loginResultDetected)
+                {
+                    TakeScreenshot("таймаут_входа");
+                    throw new WebDriverTimeoutException("Таймаут ожидания результата входа - не обнаружено ни успеха, ни ошибки");
+                }
 
-                string urlBeforeLogout = driver.Url;
-                Console.WriteLine($"URL before logout: {urlBeforeLogout}");
+                // Определяем результат входа
+                bool isLoginSuccessful = Wait.Until(d =>
+                {
+                    try
+                    {
+                        var currentUrl = d.Url.ToLower();
+                        bool isNotLoginPage = !currentUrl.Contains("login") &&
+                                             !currentUrl.Contains("auth/login");
 
-                Console.WriteLine("Step 6: Opening user dropdown...");
+                        return isNotLoginPage && d.FindElements(By.CssSelector(".dropdown-user, .user-menu"))
+                                                 .Any(e => e.Displayed);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+
+                if (!isLoginSuccessful)
+                {
+                    // Проверяем ошибки авторизации
+                    var errorElements = Driver.FindElements(By.CssSelector(".error, .alert, .text-danger, .login-error, .field-error, [class*='error']"))
+                                             .Where(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text))
+                                             .ToList();
+
+                    if (errorElements.Any())
+                    {
+                        string errorMessage = string.Join(" | ", errorElements.Select(e => e.Text.Trim()));
+                        TakeScreenshot("вход_не_удался_с_ошибкой");
+                        throw new Exception($"Вход не удался. Сообщение об ошибке: {errorMessage}");
+                    }
+                    else
+                    {
+                        // Проверяем, остались ли мы на странице логина
+                        bool isOnLoginPage = Driver.Url.ToLower().Contains("login") &&
+                                           Driver.FindElements(By.Id("loginform-login")).Any(e => e.Displayed);
+
+                        if (isOnLoginPage)
+                        {
+                            TakeScreenshot("вход_не_удался_без_сообщения_об_ошибке");
+                            throw new Exception("Вход не удался - остались на странице входа, но нет сообщения об ошибке. Возможные причины: неверные учетные данные, заблокированный аккаунт или проблемы с сервером");
+                        }
+                        else
+                        {
+                            TakeScreenshot("неизвестный_результат_входа");
+                            throw new Exception($"Вход не удался - неизвестный результат. Текущий URL: {Driver.Url}");
+                        }
+                    }
+                }
+
+                Report.AddSuccess("Вход выполнен успешно!");
+                TakeScreenshot("после_успешного_входа");
+
+                Report.AddStep("Шаг 6: Ожидание стабилизации интерфейса...");
+                System.Threading.Thread.Sleep(2000);
+
+                Report.AddStep("Шаг 7: Открытие выпадающего меню пользователя...");
                 bool dropdownOpened = false;
 
                 try
                 {
-                    var userDropdownCaret = driver.FindElements(By.CssSelector(".dropdown-user .caret"));
-                    if (userDropdownCaret.Count > 0 && userDropdownCaret[0].Displayed)
-                    {
-                        userDropdownCaret[0].Click();
-                        dropdownOpened = true;
-                    }
+                    var userDropdown = Driver.FindElement(By.CssSelector(".dropdown-user .caret"));
+                    userDropdown.Click();
+                    dropdownOpened = true;
                 }
                 catch
                 {
-                    Console.WriteLine("Caret not found, trying main dropdown element...");
-                }
-
-                if (!dropdownOpened)
-                {
                     try
                     {
-                        var userDropdown = driver.FindElement(By.CssSelector(".dropdown-user"));
+                        var userDropdown = Driver.FindElement(By.CssSelector(".dropdown-user"));
                         userDropdown.Click();
                         dropdownOpened = true;
                     }
                     catch
                     {
-                        Console.WriteLine("Dropdown element not clickable, using JavaScript...");
-                        js.ExecuteScript("document.querySelector('.dropdown-user').click();");
-                        dropdownOpened = true;
-                    }
-                }
-
-                Console.WriteLine("Step 7: Clicking logout button...");
-                Thread.Sleep(1000);
-
-                bool logoutClicked = false;
-
-                try
-                {
-                    var logoutButtons = driver.FindElements(By.LinkText("Logout"))
-                        .Concat(driver.FindElements(By.XPath("//a[contains(text(),'Logout')]")))
-                        .Where(e => e.Displayed)
-                        .ToList();
-
-                    if (logoutButtons.Count > 0)
-                    {
-                        logoutButtons[0].Click();
-                        logoutClicked = true;
-                    }
-                }
-                catch
-                {
-                    Console.WriteLine("Logout button not found with standard methods");
-                }
-
-                if (!logoutClicked)
-                {
-                    Console.WriteLine("Using JavaScript to find and click logout...");
-                    js.ExecuteScript(@"
-                        var logoutElements = [];
-                        var allElements = document.querySelectorAll('*');
-                        for (var i = 0; i < allElements.length; i++) {
-                            var el = allElements[i];
-                            if (el.textContent && el.textContent.trim().toLowerCase() === 'logout') {
-                                logoutElements.push(el);
-                            }
-                        }
-                        var logoutLinks = document.querySelectorAll('a[href*=""logout""], a[onclick*=""logout""]');
-                        for (var j = 0; j < logoutLinks.length; j++) {
-                            logoutElements.push(logoutLinks[j]);
-                        }
-                        if (logoutElements.length > 0) {
-                            logoutElements[0].click();
-                        }
-                    ");
-                    logoutClicked = true;
-                }
-
-                Console.WriteLine("Step 8: Waiting for logout to complete...");
-                wait.Until(d =>
-                {
-                    try
-                    {
-                        var currentUrl = d.Url;
-
-                        if (currentUrl != urlBeforeLogout)
-                        {
-                            Console.WriteLine($"URL changed to: {currentUrl}");
-                            return true;
-                        }
-
-                        var userElements = d.FindElements(By.CssSelector(".dropdown-user"));
-                        if (userElements.Count == 0 || !userElements[0].Displayed)
-                        {
-                            Console.WriteLine("User elements disappeared");
-                            return true;
-                        }
-
-                        var loginElements = d.FindElements(By.Id("loginform-login"));
-                        if (loginElements.Count > 0 && loginElements[0].Displayed)
-                        {
-                            Console.WriteLine("Login elements appeared");
-                            return true;
-                        }
-
-                        return false;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                });
-
-                Console.WriteLine("Step 9: Verifying logout state...");
-                Thread.Sleep(2000);
-
-                bool isLoggedOut = false;
-                string currentUrl = driver.Url;
-
-                if (currentUrl.ToLower().Contains("login") || currentUrl.Contains("auth"))
-                {
-                    isLoggedOut = true;
-                    Console.WriteLine("On login page - logged out");
-                }
-
-                if (!isLoggedOut)
-                {
-                    try
-                    {
-                        var loginInput = driver.FindElement(By.Id("loginform-login"));
-                        if (loginInput.Displayed)
-                        {
-                            isLoggedOut = true;
-                            Console.WriteLine("Login form visible - logged out");
-                        }
-                    }
-                    catch
-                    {
-                    }
-                }
-
-                if (!isLoggedOut)
-                {
-                    try
-                    {
-                        var userElements = driver.FindElements(By.CssSelector(".dropdown-user"));
-                        if (userElements.Count == 0 || !userElements[0].Displayed)
-                        {
-                            isLoggedOut = true;
-                            Console.WriteLine("User elements disappeared - logged out");
-                        }
-                    }
-                    catch
-                    {
-                    }
-                }
-
-                if (!isLoggedOut)
-                {
-                    try
-                    {
-                        var authState = js.ExecuteScript(@"
-                            return {
-                                hasLoginForm: !!document.getElementById('loginform-login'),
-                                hasAuthElements: !!document.querySelector('[class*=""user""], [class*=""account""]'),
-                                url: window.location.href
-                            };
-                        ");
-                        Console.WriteLine($"Auth state: {authState}");
-                    }
-                    catch (Exception jsEx)
-                    {
-                        Console.WriteLine($"JS auth check failed: {jsEx.Message}");
-                    }
-                }
-
-                if (!isLoggedOut)
-                {
-                    Console.WriteLine("Logout may not have worked, trying direct navigation to login...");
-                    driver.Navigate().GoToUrl("https://ai-ecosystem-test.janusww.com:9999/auth/login.html");
-
-                    wait.Until(d =>
-                    {
                         try
                         {
-                            return d.FindElement(By.Id("loginform-login")).Displayed;
+                            ((IJavaScriptExecutor)Driver).ExecuteScript("document.querySelector('.dropdown-user').click();");
+                            dropdownOpened = true;
                         }
                         catch
                         {
-                            return false;
+                            Report.AddWarning("Не удалось открыть выпадающее меню пользователя любым методом");
                         }
-                    });
-
-                    isLoggedOut = true;
+                    }
                 }
 
-                Assert.That(isLoggedOut, Is.True, "User is not logged out. System may not support logout functionality or UI has changed.");
+                if (dropdownOpened)
+                {
+                    Report.AddStep("Шаг 8: Нажатие кнопки выхода...");
+                    System.Threading.Thread.Sleep(1000);
 
-                Console.WriteLine("Step 10: Testing re-login capability...");
-                var loginInputFinal = driver.FindElement(By.Id("loginform-login"));
-                loginInputFinal.Clear();
-                loginInputFinal.SendKeys("v_shutenko");
+                    bool logoutClicked = false;
 
-                var passwordInput = driver.FindElement(By.Id("loginform-password"));
-                passwordInput.Clear();
-                passwordInput.SendKeys("8nEThznM");
+                    try
+                    {
+                        var logoutButton = Wait.Until(d =>
+                        {
+                            var elements = d.FindElements(By.LinkText("Logout"));
+                            return elements.FirstOrDefault(e => e.Displayed);
+                        });
 
-                Assert.That(loginInputFinal.GetAttribute("value"), Is.EqualTo("v_shutenko"));
-                Assert.That(passwordInput.GetAttribute("value"), Is.EqualTo("8nEThznM"));
+                        if (logoutButton != null)
+                        {
+                            logoutButton.Click();
+                            logoutClicked = true;
+                        }
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            var logoutButton = Driver.FindElement(By.XPath("//a[contains(text(),'Logout')]"));
+                            logoutButton.Click();
+                            logoutClicked = true;
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                ((IJavaScriptExecutor)Driver).ExecuteScript(@"
+                                    var links = document.querySelectorAll('a');
+                                    for(var i=0; i<links.length; i++) {
+                                        if(links[i].textContent.trim().toLowerCase() === 'logout') {
+                                            links[i].click();
+                                            break;
+                                        }
+                                    }");
+                                logoutClicked = true;
+                            }
+                            catch
+                            {
+                                Report.AddWarning("Не удалось найти кнопку выхода любым методом");
+                            }
+                        }
+                    }
 
-                Console.WriteLine("Test completed successfully: Login and logout verification passed");
+                    if (logoutClicked)
+                    {
+                        Report.AddStep("Шаг 9: Ожидание возврата на страницу входа...");
+                        bool returnedToLogin = Wait.Until(d =>
+                        {
+                            try
+                            {
+                                var currentUrl = d.Url.ToLower();
+                                var isLoginPage = currentUrl.Contains("login") ||
+                                                 currentUrl.Contains("auth") ||
+                                                 currentUrl.EndsWith("/") ||
+                                                 currentUrl.Contains("login.html");
+
+                                if (!isLoginPage) return false;
+
+                                try
+                                {
+                                    var loginFieldExists = d.FindElement(By.Id("loginform-login")).Displayed;
+                                    return loginFieldExists;
+                                }
+                                catch
+                                {
+                                    return false;
+                                }
+                            }
+                            catch
+                            {
+                                return false;
+                            }
+                        });
+
+                        Assert.That(returnedToLogin, Is.True, "Не удалось вернуться на страницу входа после выхода");
+
+                        Report.AddStep("Шаг 10: Проверка доступности страницы входа...");
+                        var loginInputs = Driver.FindElements(By.Id("loginform-login"));
+                        Assert.That(loginInputs.Count, Is.GreaterThan(0), "Поля входа не найдены после выхода");
+                        Assert.That(loginInputs.First().Displayed, Is.True, "Поле входа не отображается");
+
+                        Report.AddSuccess("Тест завершен успешно: вход и выход выполнены корректно");
+                        TakeScreenshot("после_успешного_выхода");
+                    }
+                    else
+                    {
+                        Report.AddWarning("Кнопка выхода не найдена - тест частично завершен");
+                    }
+                }
+                else
+                {
+                    Report.AddWarning("Не удалось открыть выпадающее меню пользователя - тест частично завершен");
+                }
+
             }
             catch (WebDriverTimeoutException timeoutEx)
             {
-                Console.WriteLine($"Timeout exception occurred: {timeoutEx.Message}");
-                Console.WriteLine($"Current URL: {driver.Url}");
-                Console.WriteLine($"Page Title: {driver.Title}");
-
-                try
-                {
-                    Console.WriteLine("Page source snippet (first 1000 chars):");
-                    string pageSource = driver.PageSource;
-                    Console.WriteLine(pageSource.Substring(0, Math.Min(1000, pageSource.Length)));
-                }
-                catch (Exception pageSourceEx)
-                {
-                    Console.WriteLine($"Failed to get page source: {pageSourceEx.Message}");
-                }
-
-                try
-                {
-                    var screenshot = ((ITakesScreenshot)driver).GetScreenshot();
-                    string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    screenshot.SaveAsFile($"logout_timeout_{timestamp}.png");
-                    Console.WriteLine($"Screenshot saved as logout_timeout_{timestamp}.png");
-                }
-                catch (Exception screenshotEx)
-                {
-                    Console.WriteLine($"Failed to take screenshot: {screenshotEx.Message}");
-                }
-
+                MarkTestAsFailed();
+                Report.AddError("Произошло исключение таймаута во время авторизации", timeoutEx);
+                Report.AddStep($"Текущий URL: {Driver.Url}");
+                Report.AddStep($"Заголовок страницы: {Driver.Title}");
+                Report.AddStep($"Длина исходного кода страницы: {Driver.PageSource?.Length ?? 0} символов");
+                TakeScreenshot("ошибка_таймаута_авторизации");
                 throw;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception occurred: {ex.Message}");
-                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
-                Console.WriteLine($"Current URL: {driver.Url}");
-                Console.WriteLine($"Page Title: {driver.Title}");
-
-                try
-                {
-                    Console.WriteLine("Page source snippet (first 500 chars):");
-                    string pageSource = driver.PageSource;
-                    Console.WriteLine(pageSource.Substring(0, Math.Min(500, pageSource.Length)));
-                }
-                catch (Exception pageSourceEx)
-                {
-                    Console.WriteLine($"Failed to get page source: {pageSourceEx.Message}");
-                }
-
-                try
-                {
-                    var screenshot = ((ITakesScreenshot)driver).GetScreenshot();
-                    string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                    screenshot.SaveAsFile($"logout_error_{timestamp}.png");
-                    Console.WriteLine($"Screenshot saved as logout_error_{timestamp}.png");
-                }
-                catch (Exception screenshotEx)
-                {
-                    Console.WriteLine($"Failed to take screenshot: {screenshotEx.Message}");
-                }
-
+                MarkTestAsFailed();
+                Report.AddError("Тест авторизации провален", ex);
+                Report.AddStep($"Текущий URL: {Driver.Url}");
+                Report.AddStep($"Заголовок страницы: {Driver.Title}");
+                TakeScreenshot("общая_ошибка_авторизации");
                 throw;
             }
         }

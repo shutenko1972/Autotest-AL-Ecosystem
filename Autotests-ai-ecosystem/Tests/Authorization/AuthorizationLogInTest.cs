@@ -1,63 +1,28 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
+﻿using NUnit.Framework;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Firefox;
-using OpenQA.Selenium.Remote;
 using OpenQA.Selenium.Support.UI;
-using OpenQA.Selenium.Interactions;
-using NUnit.Framework;
+using System;
+using System.Linq;
 
 namespace Authorization
 {
     [TestFixture]
-    public class AuthorizationLogInTestTest
+    public class AuthorizationLogInTestTest : Autotests.BaseTest
     {
-        private IWebDriver driver;
-        public IDictionary<string, object> vars { get; private set; }
-        private IJavaScriptExecutor js;
-        private WebDriverWait wait;
-
-        [SetUp]
-        public void SetUp()
-        {
-            var options = new ChromeOptions();
-            options.AddArgument("--start-maximized");
-            options.AddArgument("--ignore-certificate-errors");
-            driver = new ChromeDriver(options);
-            js = (IJavaScriptExecutor)driver;
-            vars = new Dictionary<string, object>();
-            wait = new WebDriverWait(driver, TimeSpan.FromSeconds(30));
-        }
-
-        [TearDown]
-        protected void TearDown()
-        {
-            if (driver != null)
-            {
-                driver.Quit();
-                driver.Dispose();
-            }
-        }
+        private const string ValidLogin = "v_shutenko";
+        private const string ValidPassword = "8nEThznM";
 
         [Test]
         public void AuthorizationLogInTest()
         {
             try
             {
-                if (driver == null)
-                {
-                    throw new InvalidOperationException("WebDriver is not initialized");
-                }
+                Report.AddStep("Шаг 1: Переход на страницу входа...");
+                Driver.Navigate().GoToUrl("https://ai-ecosystem-test.janusww.com:9999/auth/login.html");
+                Report.AddUrlInfo(Driver.Url);
 
-                Console.WriteLine("Step 1: Navigating to login page...");
-                driver.Navigate().GoToUrl("https://ai-ecosystem-test.janusww.com:9999/auth/login.html");
-
-                Console.WriteLine("Waiting for login page to load...");
-                wait.Until(d =>
+                Report.AddStep("Ожидание загрузки страницы входа...");
+                Wait.Until(d =>
                 {
                     try
                     {
@@ -70,28 +35,43 @@ namespace Authorization
                     }
                 });
 
-                Console.WriteLine("Step 2: Filling login field...");
-                var loginField = driver.FindElement(By.Id("loginform-login"));
+                Report.AddStep("Шаг 2: Заполнение поля логина...");
+                var loginField = Driver.FindElement(By.Id("loginform-login"));
                 loginField.Clear();
-                loginField.SendKeys("v_shutenko");
+                loginField.SendKeys(ValidLogin);
 
-                Console.WriteLine("Step 3: Filling password field...");
-                var passwordField = driver.FindElement(By.Id("loginform-password"));
+                Report.AddStep("Шаг 3: Заполнение поля пароля...");
+                var passwordField = Driver.FindElement(By.Id("loginform-password"));
                 passwordField.Clear();
-                passwordField.SendKeys("8nEThznM");
+                passwordField.SendKeys(ValidPassword);
 
-                Console.WriteLine("Step 4: Clicking login button...");
-                var loginButton = driver.FindElement(By.CssSelector(".icon-circle-right2"));
+                Report.AddStep("Шаг 4: Нажатие кнопки входа...");
+                var loginButton = Driver.FindElement(By.CssSelector(".icon-circle-right2"));
                 loginButton.Click();
 
-                Console.WriteLine("Step 5: Waiting for successful login...");
-                wait.Until(d => !d.Url.ToLower().Contains("login"));
+                Report.AddStep("Шаг 5: Ожидание результата входа...");
 
-                wait.Until(d =>
+                // Ждем либо успешного входа, либо появления ошибки
+                bool loginResultDetected = Wait.Until(d =>
                 {
                     try
                     {
-                        return d.FindElement(By.CssSelector(".dropdown-user")).Displayed;
+                        // Проверяем успешный вход - исчезла страница логина и появились элементы dashboard
+                        var currentUrl = d.Url.ToLower();
+                        bool isNotLoginPage = !currentUrl.Contains("login") &&
+                                             !currentUrl.Contains("auth/login");
+
+                        bool hasDashboardElements = d.FindElements(By.CssSelector(".dropdown-user, .user-menu, .dashboard, .main-content"))
+                                                   .Any(e => e.Displayed);
+
+                        // Проверяем ошибку входа - остались на странице логина + есть сообщение об ошибке
+                        bool isStillOnLoginPage = currentUrl.Contains("login") ||
+                                                 currentUrl.Contains("auth/login");
+
+                        bool hasErrorElements = d.FindElements(By.CssSelector(".error, .alert, .text-danger, .login-error, .field-error, [class*='error'], [class*='alert']"))
+                                                .Any(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text));
+
+                        return (isNotLoginPage && hasDashboardElements) || (isStillOnLoginPage && hasErrorElements);
                     }
                     catch
                     {
@@ -99,45 +79,87 @@ namespace Authorization
                     }
                 });
 
-                Console.WriteLine("Login successful!");
-                Console.WriteLine($"Current URL: {driver.Url}");
-                Console.WriteLine($"Page Title: {driver.Title}");
+                if (!loginResultDetected)
+                {
+                    TakeScreenshot("таймаут_входа");
+                    throw new WebDriverTimeoutException("Таймаут ожидания результата входа - не обнаружено ни успеха, ни ошибки");
+                }
 
-                Console.WriteLine("Test completed successfully: Login performed correctly");
+                // Определяем результат входа
+                bool isLoginSuccessful = Wait.Until(d =>
+                {
+                    try
+                    {
+                        var currentUrl = d.Url.ToLower();
+                        bool isNotLoginPage = !currentUrl.Contains("login") &&
+                                             !currentUrl.Contains("auth/login");
+
+                        return isNotLoginPage && d.FindElements(By.CssSelector(".dropdown-user, .user-menu"))
+                                                 .Any(e => e.Displayed);
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+
+                if (!isLoginSuccessful)
+                {
+                    // Проверяем ошибки авторизации
+                    var errorElements = Driver.FindElements(By.CssSelector(".error, .alert, .text-danger, .login-error, .field-error, [class*='error']"))
+                                             .Where(e => e.Displayed && !string.IsNullOrWhiteSpace(e.Text))
+                                             .ToList();
+
+                    if (errorElements.Any())
+                    {
+                        string errorMessage = string.Join(" | ", errorElements.Select(e => e.Text.Trim()));
+                        TakeScreenshot("вход_не_удался_с_ошибкой");
+                        throw new Exception($"Вход не удался. Сообщение об ошибке: {errorMessage}");
+                    }
+                    else
+                    {
+                        // Проверяем, остались ли мы на странице логина
+                        bool isOnLoginPage = Driver.Url.ToLower().Contains("login") &&
+                                           Driver.FindElements(By.Id("loginform-login")).Any(e => e.Displayed);
+
+                        if (isOnLoginPage)
+                        {
+                            TakeScreenshot("вход_не_удался_без_сообщения_об_ошибке");
+                            throw new Exception("Вход не удался - остались на странице входа, но нет сообщения об ошибке. Возможные причины: неверные учетные данные, заблокированный аккаунт или проблемы с сервером");
+                        }
+                        else
+                        {
+                            TakeScreenshot("неизвестный_результат_входа");
+                            throw new Exception($"Вход не удался - неизвестный результат. Текущий URL: {Driver.Url}");
+                        }
+                    }
+                }
+
+                Report.AddSuccess("Вход выполнен успешно!");
+                Report.AddStep($"Текущий URL: {Driver.Url}");
+                Report.AddStep($"Заголовок страницы: {Driver.Title}");
+                TakeScreenshot("после_успешного_входа");
+
+                Report.AddSuccess("Тест завершен успешно: вход выполнен корректно");
 
             }
             catch (WebDriverTimeoutException timeoutEx)
             {
-                Console.WriteLine($"Timeout exception occurred: {timeoutEx.Message}");
-                Console.WriteLine($"Current URL: {driver.Url}");
-                Console.WriteLine($"Page Title: {driver.Title}");
-
-                try
-                {
-                    Console.WriteLine("Page source snippet:");
-                    Console.WriteLine(driver.PageSource.Substring(0, 500));
-                }
-                catch { }
-
+                MarkTestAsFailed();
+                Report.AddError("Произошло исключение таймаута во время авторизации", timeoutEx);
+                Report.AddStep($"Текущий URL: {Driver.Url}");
+                Report.AddStep($"Заголовок страницы: {Driver.Title}");
+                Report.AddStep($"Длина исходного кода страницы: {Driver.PageSource?.Length ?? 0} символов");
+                TakeScreenshot("ошибка_таймаута_авторизации");
                 throw;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Exception occurred: {ex.Message}");
-                Console.WriteLine($"Current URL: {driver.Url}");
-                Console.WriteLine($"Page Title: {driver.Title}");
-
-                try
-                {
-                    var screenshot = ((ITakesScreenshot)driver).GetScreenshot();
-                    screenshot.SaveAsFile("error_screenshot_login_test.png");
-                    Console.WriteLine("Screenshot saved as error_screenshot_login_test.png");
-                }
-                catch (Exception screenshotEx)
-                {
-                    Console.WriteLine($"Failed to take screenshot: {screenshotEx.Message}");
-                }
-
+                MarkTestAsFailed();
+                Report.AddError("Тест авторизации провален", ex);
+                Report.AddStep($"Текущий URL: {Driver.Url}");
+                Report.AddStep($"Заголовок страницы: {Driver.Title}");
+                TakeScreenshot("общая_ошибка_авторизации");
                 throw;
             }
         }
